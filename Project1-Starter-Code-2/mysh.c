@@ -119,32 +119,33 @@ static int run_builtin(Command *cmd)
 
     /* ---- cd ---- */
     if (strcmp(cmd->argv[0], "cd") == 0) {
-        /* [S1] TODO:
-         *   const char *dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME");
-         *   if (!dir) { fprintf(stderr, "mysh: cd: HOME not set\n"); return 0; }
-         *   if (chdir(dir) < 0) perror("cd");                                    */
+        // [S1] TODO:
+          const char *dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME"); // if cd only has one argument the go to the home directory getenv("HOME")
+           if (!dir) { fprintf(stderr, "mysh: cd: HOME not set\n"); return 0; } // if hoem directory is not set then throw an error
+           if (chdir(dir) < 0) perror("cd");// use chdir function to change directory if returns successful no error in unseccesfull throw error cd.                             
         return 0;
     }
 
     /* ---- pwd ---- */
     if (strcmp(cmd->argv[0], "pwd") == 0) {
-        /* [S1] TODO: use getcwd() -- NOT an external execvp call.
-         * pwd must be a true built-in so it reflects the shell's own cwd.
-         *   char buf[PATH_MAX];
-         *   if (getcwd(buf, sizeof(buf)) == NULL) perror("pwd");
-         *   else printf("%s\n", buf);                                            */
+        // [S1] TODO: use getcwd() -- NOT an external execvp call. pwd must be a true built-in so it reflects the shell's own cwd.
+        char buf[PATH_MAX];
+        if (getcwd(buf, sizeof(buf)) == NULL) perror("pwd"); // runs getcwd (get path name of current working directory) if getcwd returns anything but null print it with buf
+        else printf("%s\n", buf);                                            
         return 0;
     }
 
     /* ---- pid ---- */
     if (strcmp(cmd->argv[0], "pid") == 0) {
-        /* [S1] TODO: printf("%d\n", (int)getpid()); */
+        // [S1] TODO: 
+        printf("%d\n", (int)getpid()); // print pid, every shell method must have a pid so no need to check if null
         return 0;
     }
 
     /* ---- ppid ---- */
     if (strcmp(cmd->argv[0], "ppid") == 0) {
-        /* [S1] TODO: printf("%d\n", (int)getppid()); */
+        //[S1] TODO: 
+        printf("%d\n", (int)getppid());// print ppid if pid of 1 parent pid will be 0 and still printed
         return 0;
     }
 
@@ -166,49 +167,26 @@ static int run_builtin(Command *cmd)
  */
 static void run_external(Command *cmd)
 {
-    /* [S2] TODO:
-     *
-     * pid_t pid = fork();
-     *
-     * CHILD  (pid == 0):
-     *   apply_redirections(cmd);          <-- Stage 3 hook (safe no-op until S3)
-     *   execvp(cmd->argv[0], cmd->argv);
-     *   perror(cmd->argv[0]);             <-- only reached on exec failure
-     *   exit(1);
-     *
-     * PARENT (pid > 0):
-     *   printf("[%d] %s\n", pid, cmd->argv[0]);
-     *   int status;
-     *   waitpid(pid, &status, 0);
-     *   if (WIFEXITED(status))
-     *       printf("[%d] %s Exit %d\n", pid, cmd->argv[0], WEXITSTATUS(status));
-     *
-     * ERROR  (pid < 0):
-     *   perror("fork");
-     */
-
-    pid_t pid = fork();
-    if (pid < 0) {
-        perror("fork");
-        return;
-    }
-
-    if (pid == 0) {
-        /* --- CHILD --- */
-        apply_redirections(cmd);   /* Stage 3: set up redirections  */
-
-        /* [S2] TODO: call execvp here */
-
-        perror(cmd->argv[0]);
+    // [S2] TODO:
+    pid_t pid = fork(); // creates child proccess that is not shell
+     
+      if (pid == 0){
+        apply_redirections(cmd);          //<-- Stage 3 hook (safe no-op until S3)
+        execvp(cmd->argv[0], cmd->argv);
+        perror(cmd->argv[0]);             //<-- only reached on exec failure
         exit(1);
-
-    } else {
-        /* --- PARENT --- */
-        /* [S2] TODO: print PID, waitpid, print exit status */
+      }
+      if (pid > 0){
+        printf("[%d] %s\n", pid, cmd->argv[0]);
         int status;
         waitpid(pid, &status, 0);
-        (void)status;  /* remove this line once you use status */
-    }
+        if (WIFEXITED(status))
+            printf("[%d] %s Exit %d\n", pid, cmd->argv[0], WEXITSTATUS(status));
+      }
+
+      if(pid < 0){
+        perror("fork");
+      }
 }
 
 /* ================================================================== */
@@ -240,8 +218,21 @@ static void run_external(Command *cmd)
 static void apply_redirections(Command *cmd)
 {
     /* [S3] TODO: implement input redirection (cmd->input_file)  */
+    int fdin = open(cmd->input_file, O_RDONLY);
+    if (fdin < 0) { 
+        perror("input"); exit(1); 
+    }
+    dup2(fdin, STDIN_FILENO);
+    close(fdin);
+
     /* [S3] TODO: implement output redirection (cmd->output_file) */
-    (void)cmd;  /* remove this line once you start implementing */
+    int flags = O_WRONLY | O_CREAT | (cmd->append ? O_APPEND : O_TRUNC);
+    int fdout= open(cmd->output_file, flags, 0644);
+    if (fdout < 0) { 
+        perror("out"); exit(1); 
+    }
+    dup2(fdout, STDOUT_FILENO);
+    close(fdout);
 }
 
 /* ================================================================== */
