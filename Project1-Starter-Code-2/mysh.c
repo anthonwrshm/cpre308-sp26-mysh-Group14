@@ -169,6 +169,10 @@ static void run_external(Command *cmd)
 {
     // [S2] TODO:
     pid_t pid = fork(); // creates child proccess that is not shell
+     if(cmd->input_file && access(cmd->input_file, F_OK)!=0){ //check to see make sure the input file exist before you create child proccess to run command
+        perror("input");
+        return;
+     }
      
       if (pid == 0){
         apply_redirections(cmd);          //<-- Stage 3 hook (safe no-op until S3)
@@ -223,6 +227,7 @@ static void apply_redirections(Command *cmd){
         perror("input"); 
         exit(1); 
     }
+    dup2(fdin, STDOUT_FILENO);
     close(fdin);
 }
 
@@ -291,7 +296,7 @@ static void run_pipe(Command *cmd){
         perror("fork");
         exit(1);
     }
-    
+
    if (left == 0) { //parent
        dup2(pfd[1], STDOUT_FILENO);      // write end -> stdout / screen of terminal
        close(pfd[0]); close(pfd[1]);     //close 
@@ -320,3 +325,35 @@ static void run_pipe(Command *cmd){
    waitpid(left,  NULL, 0);
    waitpid(right, NULL, 0);
 }
+
+
+/* Viva qs
+
+Q: Why must cd be built in?
+A: You must change directory of the parent process, not the child process, so you cannot fork and run cd in the child
+
+Q: What would happen at the OS level if you forked a child to run cd?
+A: The parent would fork, and the child would run cd, changing the directory of the child. The child would then terminate, and the directory of the parent/shell would not change
+
+Q: What happens to the child’s address space after a successful execvp()?
+A: After a succsessful execvp(), the entire child's address space is replaced by the new program's memory. i.e, child created, exeecvp() clears code, data, heap and stack but keeps the same pid
+
+Q: What is still inherited from the parent after fork()?
+A: Child is a clone of the parent and inherits the code segment, data segment, heap, stack, open file descriptors, current directory and environment variables
+
+Q: What is a zombie process, and when does one appear in your shell?
+A: When the parent process does not use wait() to reap the child. This happens in run_external at the waitpid() statement
+
+Q: Why is dup2() called in the child rather than the parent?
+A: If you're wiring output to a file, it only runs for that specific command. If you did it in the parent, every subsequent command would also be wired to that same output file
+
+Q: What would break if the parent redirected stdout before forking?
+A: See above, but if the parent redirected before forking, everything that would be printed in the terminal would be printied in the file
+
+Q: What does /proc/PID/fd show before and after dup2()?
+A: There are three pipes: stdin, stdout and stderror. stdin reads from the terminal, while stdout and stderror write to the terminal.  dup2(fdout, STDOUT_FILENO); takes fdout that we created
+   by reading output file and wires stdout to that output file. Before it just goes to the terminal, but after it is wired to the output file. This is the same for stdin and stderror.
+
+
+
+*/
