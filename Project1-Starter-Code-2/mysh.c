@@ -215,17 +215,19 @@ static void run_external(Command *cmd)
  *   - What would break if the parent redirected before forking?
  *   - Why must close(fd) follow every dup2(fd, ...)?
  */
-static void apply_redirections(Command *cmd)
-{
+static void apply_redirections(Command *cmd){
     /* [S3] TODO: implement input redirection (cmd->input_file)  */
+    if (cmd->input_file != NULL) {
     int fdin = open(cmd->input_file, O_RDONLY);
     if (fdin < 0) { 
-        perror("input"); exit(1); 
+        perror("input"); 
+        exit(1); 
     }
-    dup2(fdin, STDIN_FILENO);
     close(fdin);
+}
 
     /* [S3] TODO: implement output redirection (cmd->output_file) */
+    if (cmd->output_file != NULL) {
     int flags = O_WRONLY | O_CREAT | (cmd->append ? O_APPEND : O_TRUNC);
     int fdout= open(cmd->output_file, flags, 0644);
     if (fdout < 0) { 
@@ -233,6 +235,7 @@ static void apply_redirections(Command *cmd)
     }
     dup2(fdout, STDOUT_FILENO);
     close(fdout);
+}
 }
 
 /* ================================================================== */
@@ -275,8 +278,45 @@ static void apply_redirections(Command *cmd)
  *   waitpid(left,  NULL, 0);
  *   waitpid(right, NULL, 0);
  */
-static void run_pipe(Command *cmd)
-{
-    (void)cmd;
-    fprintf(stderr, "mysh: pipes not yet implemented (bonus stage)\n");
+static void run_pipe(Command *cmd){
+   int pfd[2];                            // create pipe
+
+   if (pipe(pfd) < 0) { // make sure pip executes correctly
+        perror("pipe");
+        exit(1);
+    }
+
+    pid_t left = fork();
+    if (left < 0) { //error check for fork
+        perror("fork");
+        exit(1);
+    }
+    
+   if (left == 0) { //parent
+       dup2(pfd[1], STDOUT_FILENO);      // write end -> stdout / screen of terminal
+       close(pfd[0]); close(pfd[1]);     //close 
+       execvp(cmd->argv[0], cmd->argv);
+       perror(cmd->argv[0]); exit(1);
+   }
+
+   pid_t right = fork();                 // child 2: right side of pipe
+
+   if (right < 0) { // if fork for right does not work correctly
+        perror("fork");
+        exit(1);
+    }
+
+   if (right == 0) {
+       dup2(pfd[0], STDIN_FILENO);       // read end -> stdin
+       close(pfd[0]); close(pfd[1]);
+       execvp(cmd->pipe_argv[0], cmd->pipe_argv);
+       perror(cmd->pipe_argv[0]); exit(1);
+   }
+
+   // PARENT: must close BOTH ends before waitpid
+   // Viva question: what happens if you forget to close pfd[1] here?
+   close(pfd[0]);
+   close(pfd[1]);
+   waitpid(left,  NULL, 0);
+   waitpid(right, NULL, 0);
 }
