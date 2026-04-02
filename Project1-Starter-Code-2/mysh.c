@@ -227,7 +227,7 @@ static void apply_redirections(Command *cmd){
         perror("input"); 
         exit(1); 
     }
-    dup2(fdin, STDOUT_FILENO);
+    dup2(fdin, STDIN_FILENO);
     close(fdin);
 }
 
