@@ -227,6 +227,7 @@ static void apply_redirections(Command *cmd){
         perror("input"); 
         exit(1); 
     }
+    // Redirect STDIN to read from fdin
     dup2(fdin, STDIN_FILENO);
     close(fdin);
 }
@@ -238,6 +239,7 @@ static void apply_redirections(Command *cmd){
     if (fdout < 0) { 
         perror("out"); exit(1); 
     }
+    // Redirect STDOUT to write to fdout
     dup2(fdout, STDOUT_FILENO);
     close(fdout);
 }
