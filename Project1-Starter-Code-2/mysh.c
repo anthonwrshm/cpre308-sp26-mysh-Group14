@@ -284,9 +284,9 @@ static void apply_redirections(Command *cmd){
  *   waitpid(right, NULL, 0);
  */
 static void run_pipe(Command *cmd){
-   int pfd[2];                            // create pipe
+   int pfd[2];// Array to hold file descriptors for the pipe: pfd[0] for reading, pfd[1] for writing
 
-   if (pipe(pfd) < 0) { // make sure pip executes correctly
+   if (pipe(pfd) < 0) { // Create a pipe; pfd[0] is read end, pfd[1] is write end
         perror("pipe");
         exit(1);
     }
@@ -294,25 +294,25 @@ static void run_pipe(Command *cmd){
     pid_t left = fork();
     if (left < 0) { //error check for fork
         perror("fork");
-        exit(1);
+        exit(1); // if fork no work exit with error 1
     }
 
-   if (left == 0) { //parent
-       dup2(pfd[1], STDOUT_FILENO);      // write end -> stdout / screen of terminal
-       close(pfd[0]); close(pfd[1]);     //close 
-       execvp(cmd->argv[0], cmd->argv);
-       perror(cmd->argv[0]); exit(1);
+   if (left == 0) { // LEFT CHILD PROCESS: executes the first command
+       dup2(pfd[1], STDOUT_FILENO);      // write end -> stdout this is wired to the right hand side child
+       close(pfd[0]); close(pfd[1]);     // Close both ends of the pipe in this child; already duplicated write end 
+       execvp(cmd->argv[0], cmd->argv); // Execute the left-hand command
+       perror(cmd->argv[0]); exit(1); //if fail sendf error 1
    }
 
-   pid_t right = fork();                 // child 2: right side of pipe
+   pid_t right = fork(); // Fork the second child (right side of the pipe)
 
    if (right < 0) { // if fork for right does not work correctly
         perror("fork");
         exit(1);
     }
 
-   if (right == 0) {
-       dup2(pfd[0], STDIN_FILENO);       // read end -> stdin
+   if (right == 0) { // RIGHT CHILD PROCESS: executes the command reading from pipe
+       dup2(pfd[0], STDIN_FILENO);       // read of child is wired to shared file between both children FileN0
        close(pfd[0]); close(pfd[1]);
        execvp(cmd->pipe_argv[0], cmd->pipe_argv);
        perror(cmd->pipe_argv[0]); exit(1);
